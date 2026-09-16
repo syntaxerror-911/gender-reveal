@@ -1,0 +1,175 @@
+:root {
+  --curtain: #2a1f26;
+  --curtain-deep: #170f14;
+  --paper: #f4ebdd;
+  --paper-dim: #d9cdba;
+  --ink: #241c1f;
+  --brass: #c08a2e;
+  --brass-dim: #8a6320;
+  --lacquer: #c5372f;
+  --lacquer-dim: #8e211b;
+
+  --lamp: #ff6fa8;
+  --lamp-glow: rgba(255, 111, 168, 0.45);
+
+  --font-display: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --font-ui: "Archivo", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  background: var(--curtain-deep);
+  color: var(--paper);
+  font-family: var(--font-ui);
+}
+
+/*
+  #app-root is the SINGLE owner of safe-area insets. Screens must not add
+  env(safe-area-inset-*) again, or the insets get counted twice on notched
+  phones (this was the padding doubling in the original build).
+*/
+#app-root {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+}
+
+.screen {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* The booth interior: velvet folds, warm rather than neutral black. */
+.curtain {
+  background-color: var(--curtain);
+  background-image: repeating-linear-gradient(
+      90deg,
+      rgba(0, 0, 0, 0.34) 0px,
+      rgba(0, 0, 0, 0) 15px,
+      rgba(255, 255, 255, 0.05) 29px,
+      rgba(0, 0, 0, 0) 43px,
+      rgba(0, 0, 0, 0.34) 58px
+    ),
+    radial-gradient(130% 70% at 50% 0%, rgba(255, 208, 156, 0.14), transparent 62%);
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+button:focus-visible {
+  outline: 3px solid var(--brass);
+  outline-offset: 3px;
+}
+
+button:disabled {
+  cursor: default;
+}
+
+img,
+video,
+canvas {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  display: block;
+}
+
+/* Engraved brass signage plate. Caps here because booth signage is caps. */
+.plate {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #3a2a10;
+  padding: 7px 16px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, #e8c46d 0%, var(--brass) 48%, var(--brass-dim) 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 2px 5px rgba(0, 0, 0, 0.45);
+  white-space: nowrap;
+}
+
+.bulb {
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #fff8e6, var(--lamp) 62%, transparent 74%);
+  box-shadow: 0 0 10px 2px var(--lamp-glow);
+  animation: bulb-breathe 2.6s ease-in-out infinite;
+}
+
+@keyframes bulb-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.42;
+  }
+}
+
+.spin {
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes count-pop {
+  from {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes strip-drop {
+  from {
+    transform: translateY(-14px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+  .bulb {
+    opacity: 0.9;
+  }
+}
