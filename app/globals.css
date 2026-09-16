@@ -49,9 +49,15 @@ body {
     env(safe-area-inset-left);
 }
 
+/* On a phone the screen naturally fills the viewport. On a wider iPad or
+   desktop viewport it's centered to a phone-width column instead of
+   stretching every control row edge to edge. */
 .screen {
   flex: 1;
   min-height: 0;
+  width: 100%;
+  max-width: 520px;
+  margin-inline: auto;
   display: flex;
   flex-direction: column;
   position: relative;
