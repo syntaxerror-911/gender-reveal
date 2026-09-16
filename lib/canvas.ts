@@ -28,10 +28,8 @@ export function loadImage(src: string): Promise<HTMLImageElement | null> {
 export async function ensureStripFonts(): Promise<void> {
   if (typeof document === "undefined" || !document.fonts) return;
   const faces = [
-    '700 96px "Fraunces"',
-    '600 30px "Archivo"',
-    '500 28px "Archivo"',
-    '600 22px "Archivo"',
+    '800 88px "Fraunces"',
+    '800 26px "Archivo"',
     '400 68px "Great Vibes"'
   ];
   try {

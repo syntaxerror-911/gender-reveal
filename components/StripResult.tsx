@@ -18,7 +18,7 @@ import { PALETTE, type Team } from "@/lib/types";
    vertical stack of frames — no overlap, no rotation, one frame after
    another with a clean gutter between them. */
 const CARD_W = 900;
-const CORNER_R = 44;
+const CORNER_R = 0;
 const BORDER_W = 16;
 
 const HEADER_H = 300;
@@ -81,6 +81,127 @@ function drawFramedPhoto(
   ctx.restore();
 }
 
+/**
+ * The team-tag ribbon: a pennant-notched banner pinned across a corner and
+ * tilted, like a strip of washi tape laid diagonally over the photo.
+ */
+function drawRibbonBadge(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  angleDeg: number,
+  text: string,
+  bg: string,
+  fg: string
+): void {
+  const w = 260;
+  const h = 46;
+  const notch = 14;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate((angleDeg * Math.PI) / 180);
+
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.moveTo(-w / 2, -h / 2);
+  ctx.lineTo(w / 2, -h / 2);
+  ctx.lineTo(w / 2 - notch, 0);
+  ctx.lineTo(w / 2, h / 2);
+  ctx.lineTo(-w / 2, h / 2);
+  ctx.lineTo(-w / 2 + notch, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = fg;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = '800 26px "Archivo", sans-serif';
+  ctx.fillText(text, 0, 1);
+
+  ctx.restore();
+}
+
+/* Sticker artwork ---------------------------------------------------------
+   Each PNG has its green screen keyed out ahead of time (see the sticker
+   source notes) so only the illustration itself is opaque. They're loaded
+   once and cached, since they're static assets shared by every strip. */
+const STICKER_SRCS = [
+  "/stickers/rainbow-clouds.png",
+  "/stickers/flowers-red.png",
+  "/stickers/mushrooms.png",
+  "/stickers/flower-smiley.png",
+  "/stickers/flower-plain.png",
+  "/stickers/balloon-dog.png",
+  "/stickers/balloons-star.png",
+  "/stickers/question-bows.png",
+  "/stickers/question-balloon.png"
+] as const;
+
+type StickerSrc = (typeof STICKER_SRCS)[number];
+
+let stickerImagesPromise: Promise<Record<StickerSrc, HTMLImageElement | null>> | null = null;
+
+function loadStickerImages(): Promise<Record<StickerSrc, HTMLImageElement | null>> {
+  if (!stickerImagesPromise) {
+    const attempt = Promise.all(STICKER_SRCS.map((src) => loadImage(src))).then((imgs) => {
+      const map = {} as Record<StickerSrc, HTMLImageElement | null>;
+      STICKER_SRCS.forEach((src, i) => (map[src] = imgs[i]));
+      // A transient failure (a flaky connection on a party phone) shouldn't
+      // blank the stickers out for the rest of the session — only a fully
+      // successful load is worth remembering; anything else clears the
+      // cache so the next strip render tries again.
+      if (imgs.some((img) => !img)) stickerImagesPromise = null;
+      return map;
+    });
+    stickerImagesPromise = attempt;
+  }
+  return stickerImagesPromise;
+}
+
+type StickerSpec = { src: StickerSrc; cx: number; cy: number; w: number; rotateDeg: number };
+
+/**
+ * Where each sticker sits. Placement leans on the photo stack's own margins
+ * (see PHOTO_W/CARD_W) so every sticker only grazes a photo's edge — never
+ * more than roughly a quarter of the sticker's own width — and no two
+ * stickers occupy the same spot, so nothing stacks on nothing else.
+ */
+function stickerLayout(footerY: number): StickerSpec[] {
+  const photoCenterY = (i: number) => HEADER_H + i * (PHOTO_H + GUTTER) + PHOTO_H / 2;
+  return [
+    { src: "/stickers/rainbow-clouds.png", cx: 780, cy: 292, w: 210, rotateDeg: 6 },
+    { src: "/stickers/flowers-red.png", cx: 55, cy: photoCenterY(0) - 90, w: 165, rotateDeg: -7 },
+    { src: "/stickers/mushrooms.png", cx: 852, cy: photoCenterY(0) + 60, w: 185, rotateDeg: 9 },
+    { src: "/stickers/flower-smiley.png", cx: 58, cy: photoCenterY(1) - 100, w: 180, rotateDeg: -10 },
+    { src: "/stickers/flower-plain.png", cx: 848, cy: photoCenterY(1) + 90, w: 125, rotateDeg: 12 },
+    { src: "/stickers/balloon-dog.png", cx: 62, cy: photoCenterY(2) - 60, w: 200, rotateDeg: -8 },
+    { src: "/stickers/balloons-star.png", cx: 842, cy: photoCenterY(2) + 80, w: 170, rotateDeg: 7 },
+    { src: "/stickers/question-bows.png", cx: 100, cy: footerY - 30, w: 175, rotateDeg: 6 },
+    { src: "/stickers/question-balloon.png", cx: 805, cy: footerY - 30, w: 185, rotateDeg: -6 }
+  ];
+}
+
+/** Draws a sticker centered on (cx, cy), rotated, at a fixed display width
+    with its natural aspect ratio preserved. */
+function drawSticker(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  cx: number,
+  cy: number,
+  w: number,
+  rotateDeg: number
+): void {
+  const ratio = img.naturalWidth ? img.naturalHeight / img.naturalWidth : 1.5;
+  const h = w * ratio;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate((rotateDeg * Math.PI) / 180);
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
 export default function StripResult({
   team,
   photos,
@@ -140,7 +261,7 @@ export default function StripResult({
     }
 
     await ensureStripFonts();
-    const images = await loadFrames(photos);
+    const [images, stickers] = await Promise.all([loadFrames(photos), loadStickerImages()]);
     if (stale()) return;
 
     if (images.some((img) => !img)) {
@@ -173,6 +294,19 @@ export default function StripResult({
       drawFramedPhoto(ctx, img, photoX, y, PHOTO_W, PHOTO_H);
     });
 
+    /* Stickers -----------------------------------------------------------
+       Drawn after the photos (so they can graze a photo's edge) but before
+       the header/footer clouds (so a sticker that strays into either band
+       tucks under it, same as the ribbon). A missing sticker is skipped
+       quietly — decoration, unlike a blank frame, is never worth failing
+       the whole strip over. */
+    const footerY = height - FOOTER_H;
+    for (const s of stickerLayout(footerY)) {
+      const img = stickers[s.src];
+      if (!img) continue;
+      withShadow(ctx, () => drawSticker(ctx, img, s.cx, s.cy, s.w, s.rotateDeg));
+    }
+
     /* Cloud header ---------------------------------------------------------
        The solid cream field ends at HEADER_FLAT_H (well under the title's
        lowest descender), and only the decorative puff fringe below that is
@@ -193,10 +327,15 @@ export default function StripResult({
     withShadow(ctx, () => drawBubbleText(ctx, "Gender", CARD_W / 2, 92, 88, GIRL_PINK, CREAM, 14));
     withShadow(ctx, () => drawBubbleText(ctx, "Reveal!", CARD_W / 2, 178, 78, BOY_BLUE, CREAM, 14));
 
+    /* Team ribbon ---------------------------------------------------------
+       Tucked into the top-left of the cloud header, tilted like a strip of
+       washi tape laid across the corner. */
+    const teamLabel = team === "boy" ? "#TEAMBOY" : "#TEAMGIRL";
+    withShadow(ctx, () => drawRibbonBadge(ctx, 105, 105, -35, teamLabel, p.lampDeep, CREAM));
+
     /* Cloud footer -----------------------------------------------------
        Mirrors the header, but in plain white rather than cream, with the
        classic cursive keepsake note instead of any sticker or badge. */
-    const footerY = height - FOOTER_H;
     const FOOTER_CLOUD_R = 44;
     const FOOTER_FLAT_TOP = footerY + 40;
     const footerBandY = FOOTER_FLAT_TOP - FOOTER_CLOUD_R * 0.7;
