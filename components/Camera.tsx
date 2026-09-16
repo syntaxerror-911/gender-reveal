@@ -7,6 +7,10 @@ import {
   TIMER_DEFAULT,
   TIMER_MAX,
   TIMER_MIN,
+  ZOOM_DEFAULT,
+  ZOOM_MAX,
+  ZOOM_MIN,
+  ZOOM_STEP,
   type CaptureMode,
   type CaptureOrientation,
   type Slot,
@@ -37,6 +41,7 @@ export default function Camera({
   const [perm, setPerm] = useState<PermState>("idle");
   const [facing, setFacing] = useState<Facing>("user");
   const [orientation, setOrientation] = useState<CaptureOrientation>("portrait");
+  const [zoom, setZoom] = useState(ZOOM_DEFAULT);
   const [errorMsg, setErrorMsg] = useState("");
   const [flash, setFlash] = useState(false);
 
@@ -67,6 +72,8 @@ export default function Camera({
   facingRef.current = facing;
   const orientationRef = useRef(orientation);
   orientationRef.current = orientation;
+  const zoomRef = useRef(zoom);
+  zoomRef.current = zoom;
   const timerSecRef = useRef(timerSec);
   timerSecRef.current = timerSec;
   const onPhotosChangeRef = useRef(onPhotosChange);
@@ -237,6 +244,19 @@ export default function Camera({
       sy = (vh - sh) / 2;
     }
 
+    // Zoom is a digital crop, not a lens: shrink the same centered rect
+    // rather than reading a hardware zoom capability, so it behaves
+    // identically on every device regardless of camera API support.
+    const z = zoomRef.current;
+    if (z > 1) {
+      const zw = sw / z;
+      const zh = sh / z;
+      sx += (sw - zw) / 2;
+      sy += (sh - zh) / 2;
+      sw = zw;
+      sh = zh;
+    }
+
     ctx.save();
     if (facingRef.current === "user") {
       ctx.translate(outW, 0);
@@ -384,10 +404,20 @@ export default function Camera({
               width: "100%",
               height: "100%",
               objectFit: "cover",
-              transform: facing === "user" ? "scaleX(-1)" : "none",
+              transform: `${facing === "user" ? "scaleX(-1) " : ""}scale(${zoom})`,
               opacity: live ? 1 : 0
             }}
           />
+
+          {live && (
+            <ZoomStepper
+              value={zoom}
+              disabled={busy}
+              onAdjust={(delta) =>
+                setZoom((z) => Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, Math.round((z + delta) * 10) / 10)))
+              }
+            />
+          )}
 
           {countdown !== null && (
             <div
@@ -706,6 +736,72 @@ function TimerStepper({
         {value}s
       </span>
       {btn(1, "Lengthen the countdown", "+")}
+    </div>
+  );
+}
+
+/** A floating pill over the viewfinder — zoom is framing, not a booth
+    setting, so it lives on the preview itself rather than the control row. */
+function ZoomStepper({
+  value,
+  disabled,
+  onAdjust
+}: {
+  value: number;
+  disabled: boolean;
+  onAdjust: (delta: number) => void;
+}) {
+  const btn = (delta: number, label: string, glyph: string) => (
+    <button
+      onClick={() => onAdjust(delta)}
+      disabled={disabled || (delta < 0 ? value <= ZOOM_MIN : value >= ZOOM_MAX)}
+      aria-label={label}
+      style={{
+        width: 28,
+        height: 28,
+        borderRadius: "50%",
+        fontSize: 16,
+        lineHeight: 1,
+        color: "var(--paper)",
+        background: "rgba(255,255,255,0.14)",
+        opacity: disabled || (delta < 0 ? value <= ZOOM_MIN : value >= ZOOM_MAX) ? 0.35 : 1
+      }}
+    >
+      {glyph}
+    </button>
+  );
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        left: "50%",
+        bottom: 14,
+        transform: "translateX(-50%)",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        padding: "4px 6px",
+        borderRadius: 999,
+        background: "rgba(10,6,9,0.55)",
+        backdropFilter: "blur(3px)",
+        border: "1px solid rgba(255,255,255,0.14)"
+      }}
+    >
+      {btn(-ZOOM_STEP, "Zoom out", "−")}
+      <span
+        aria-live="polite"
+        style={{
+          minWidth: 34,
+          textAlign: "center",
+          fontSize: 13,
+          fontWeight: 600,
+          fontVariantNumeric: "tabular-nums"
+        }}
+      >
+        {value.toFixed(1)}x
+      </span>
+      {btn(ZOOM_STEP, "Zoom in", "+")}
     </div>
   );
 }

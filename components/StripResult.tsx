@@ -162,23 +162,25 @@ function loadStickerImages(): Promise<Record<StickerSrc, HTMLImageElement | null
 type StickerSpec = { src: StickerSrc; cx: number; cy: number; w: number; rotateDeg: number };
 
 /**
- * Where each sticker sits. Placement leans on the photo stack's own margins
- * (see PHOTO_W/CARD_W) so every sticker only grazes a photo's edge — never
- * more than roughly a quarter of the sticker's own width — and no two
- * stickers occupy the same spot, so nothing stacks on nothing else.
+ * Where each sticker sits. The margin beside the photo stack is only
+ * PAD = (CARD_W - PHOTO_W) / 2 = 120px wide, so a sticker big enough to read
+ * as "bigger" has to lean into the photo's edge — every position here is
+ * solved so the sticker's own rotated bounding box never crosses the card's
+ * outer edge (which would silently clip it), while the overlap onto the
+ * photo stays under the 55% ceiling the design keeps everywhere else.
  */
 function stickerLayout(footerY: number): StickerSpec[] {
   const photoCenterY = (i: number) => HEADER_H + i * (PHOTO_H + GUTTER) + PHOTO_H / 2;
   return [
-    { src: "/stickers/rainbow-clouds.png", cx: 780, cy: 292, w: 210, rotateDeg: 6 },
-    { src: "/stickers/flowers-red.png", cx: 55, cy: photoCenterY(0) - 90, w: 165, rotateDeg: -7 },
-    { src: "/stickers/mushrooms.png", cx: 852, cy: photoCenterY(0) + 60, w: 185, rotateDeg: 9 },
-    { src: "/stickers/flower-smiley.png", cx: 58, cy: photoCenterY(1) - 100, w: 180, rotateDeg: -10 },
-    { src: "/stickers/flower-plain.png", cx: 848, cy: photoCenterY(1) + 90, w: 125, rotateDeg: 12 },
-    { src: "/stickers/balloon-dog.png", cx: 62, cy: photoCenterY(2) - 60, w: 200, rotateDeg: -8 },
-    { src: "/stickers/balloons-star.png", cx: 842, cy: photoCenterY(2) + 80, w: 170, rotateDeg: 7 },
-    { src: "/stickers/question-bows.png", cx: 100, cy: footerY - 30, w: 175, rotateDeg: 6 },
-    { src: "/stickers/question-balloon.png", cx: 805, cy: footerY - 30, w: 185, rotateDeg: -6 }
+    { src: "/stickers/rainbow-clouds.png", cx: 740, cy: 300, w: 260, rotateDeg: 6 },
+    { src: "/stickers/flowers-red.png", cx: 115, cy: photoCenterY(0) - 90, w: 195, rotateDeg: -4 },
+    { src: "/stickers/mushrooms.png", cx: 784, cy: photoCenterY(0) + 60, w: 195, rotateDeg: 4 },
+    { src: "/stickers/flower-smiley.png", cx: 115, cy: photoCenterY(1) - 100, w: 195, rotateDeg: -4 },
+    { src: "/stickers/flower-plain.png", cx: 784, cy: photoCenterY(1) + 90, w: 195, rotateDeg: 4 },
+    { src: "/stickers/balloon-dog.png", cx: 115, cy: photoCenterY(2) - 60, w: 195, rotateDeg: -4 },
+    { src: "/stickers/balloons-star.png", cx: 784, cy: photoCenterY(2) + 80, w: 195, rotateDeg: 4 },
+    { src: "/stickers/question-bows.png", cx: 145, cy: footerY - 38, w: 240, rotateDeg: 6 },
+    { src: "/stickers/question-balloon.png", cx: 755, cy: footerY - 38, w: 240, rotateDeg: -6 }
   ];
 }
 
@@ -359,7 +361,7 @@ export default function StripResult({
 
     ctx.fillStyle = "rgba(36,28,31,0.72)";
     ctx.font = '400 42px "Great Vibes", "Brush Script MT", cursive';
-    ctx.fillText(formatDate(), CARD_W / 2, height - 96);
+    ctx.fillText("September 20, 2026", CARD_W / 2, height - 96);
 
     ctx.fillStyle = "rgba(36,28,31,0.6)";
     ctx.font = '400 36px "Great Vibes", "Brush Script MT", cursive';
@@ -616,16 +618,4 @@ const actionBtnSecondary: React.CSSProperties = {
 
 function loadFrames(photos: string[]) {
   return Promise.all(photos.map((src) => loadImage(src)));
-}
-
-function formatDate() {
-  try {
-    return new Date().toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "long",
-      day: "numeric"
-    });
-  } catch {
-    return new Date().toDateString();
-  }
 }

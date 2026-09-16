@@ -20,6 +20,13 @@ export const TIMER_MIN = 1;
 export const TIMER_MAX = 15;
 export const TIMER_DEFAULT = 3;
 
+/** Digital zoom: a crop-and-scale on the frame, not a hardware lens, so it
+    works the same on every device regardless of camera API support. */
+export const ZOOM_MIN = 1;
+export const ZOOM_MAX = 3;
+export const ZOOM_STEP = 0.5;
+export const ZOOM_DEFAULT = 1;
+
 import type { CSSProperties } from "react";
 
 export type Palette = {
