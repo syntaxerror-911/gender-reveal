@@ -2,22 +2,19 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  CAPTURE_DIMS,
   PALETTE,
   TIMER_DEFAULT,
   TIMER_MAX,
   TIMER_MIN,
   type CaptureMode,
+  type CaptureOrientation,
   type Slot,
   type Team
 } from "@/lib/types";
 
 type PermState = "idle" | "requesting" | "granted" | "denied" | "error";
 type Facing = "user" | "environment";
-
-const OUT_W = 900;
-const OUT_H = 1200;
-/** Preview is locked to the capture ratio so framing is honest. */
-const PREVIEW_RATIO = `${OUT_W} / ${OUT_H}`;
 
 export default function Camera({
   team,
@@ -39,8 +36,12 @@ export default function Camera({
 
   const [perm, setPerm] = useState<PermState>("idle");
   const [facing, setFacing] = useState<Facing>("user");
+  const [orientation, setOrientation] = useState<CaptureOrientation>("portrait");
   const [errorMsg, setErrorMsg] = useState("");
   const [flash, setFlash] = useState(false);
+
+  /** Preview is locked to the capture ratio so framing is honest. */
+  const previewRatio = `${CAPTURE_DIMS[orientation].w} / ${CAPTURE_DIMS[orientation].h}`;
 
   const [mode, setMode] = useState<CaptureMode>("instant");
   const [timerSec, setTimerSec] = useState(TIMER_DEFAULT);
@@ -64,6 +65,8 @@ export default function Camera({
   activeRef.current = activeIndex;
   const facingRef = useRef(facing);
   facingRef.current = facing;
+  const orientationRef = useRef(orientation);
+  orientationRef.current = orientation;
   const timerSecRef = useRef(timerSec);
   timerSecRef.current = timerSec;
   const onPhotosChangeRef = useRef(onPhotosChange);
@@ -108,11 +111,16 @@ export default function Camera({
         return;
       }
 
+      const idealDims =
+        orientationRef.current === "portrait"
+          ? { width: { ideal: 1080 }, height: { ideal: 1440 } }
+          : { width: { ideal: 1440 }, height: { ideal: 1080 } };
+
       let stream: MediaStream;
       try {
         stream = await open({
           audio: false,
-          video: { facingMode: facing, width: { ideal: 1080 }, height: { ideal: 1440 } }
+          video: { facingMode: facing, ...idealDims }
         });
       } catch (err) {
         // Laptops and some tablets have no rear camera; fall back to any lens
@@ -149,7 +157,7 @@ export default function Camera({
         setErrorMsg("The camera didn't open. Close other apps using it, then try again.");
       }
     }
-  }, [facing, stopStream]);
+  }, [facing, orientation, stopStream]);
 
   // Restart only after the camera has actually been opened once. Guarding on a
   // ref (not on perm) keeps Strict Mode's double-mount from opening two streams.
@@ -206,14 +214,15 @@ export default function Camera({
       return roll.filter((s) => !s).length;
     }
 
-    canvas.width = OUT_W;
-    canvas.height = OUT_H;
+    const { w: outW, h: outH } = CAPTURE_DIMS[orientationRef.current];
+    canvas.width = outW;
+    canvas.height = outH;
     const ctx = canvas.getContext("2d");
     if (!ctx) return roll.filter((s) => !s).length;
 
     const vw = video.videoWidth;
     const vh = video.videoHeight;
-    const targetRatio = OUT_W / OUT_H;
+    const targetRatio = outW / outH;
     const srcRatio = vw / vh;
 
     let sx = 0;
@@ -230,10 +239,10 @@ export default function Camera({
 
     ctx.save();
     if (facingRef.current === "user") {
-      ctx.translate(OUT_W, 0);
+      ctx.translate(outW, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, OUT_W, OUT_H);
+    ctx.drawImage(video, sx, sy, sw, sh, 0, 0, outW, outH);
     ctx.restore();
 
     const next = [...roll];
@@ -329,7 +338,15 @@ export default function Camera({
           <Chevron />
         </button>
         <span className="plate">{p.word}</span>
-        <span style={{ width: 40 }} aria-hidden />
+        <button
+          onClick={() => setOrientation((o) => (o === "portrait" ? "landscape" : "portrait"))}
+          disabled={busy}
+          aria-label={`Switch to ${orientation === "portrait" ? "landscape" : "portrait"} capture`}
+          aria-pressed={orientation === "landscape"}
+          style={{ ...roundBtn, opacity: busy ? 0.4 : 1 }}
+        >
+          <OrientationIcon orientation={orientation} />
+        </button>
       </header>
 
       {/* Viewing window inside a brass bezel, locked to the capture ratio. */}
@@ -347,8 +364,10 @@ export default function Camera({
           style={{
             position: "relative",
             width: "100%",
-            maxWidth: "min(100%, calc((100vh - 330px) * 0.75))",
-            aspectRatio: PREVIEW_RATIO,
+            maxWidth: `min(100%, calc((100vh - 330px) * ${
+              CAPTURE_DIMS[orientation].w / CAPTURE_DIMS[orientation].h
+            }))`,
+            aspectRatio: previewRatio,
             borderRadius: 14,
             overflow: "hidden",
             background: "#0b0709",
@@ -768,6 +787,23 @@ function Chevron() {
         strokeWidth="2"
         strokeLinecap="round"
         strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+function OrientationIcon({ orientation }: { orientation: CaptureOrientation }) {
+  const portrait = orientation === "portrait";
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect
+        x={portrait ? 6 : 3}
+        y={portrait ? 3 : 6}
+        width={portrait ? 12 : 18}
+        height={portrait ? 18 : 12}
+        rx={2.5}
+        stroke="currentColor"
+        strokeWidth="2"
       />
     </svg>
   );

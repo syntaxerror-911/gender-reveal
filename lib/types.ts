@@ -5,6 +5,15 @@ export type Slot = string | null;
 /** "instant" fires on tap; "timer" counts down first. */
 export type CaptureMode = "instant" | "timer";
 
+/** Which way the frame is cropped when a shot is taken. */
+export type CaptureOrientation = "portrait" | "landscape";
+
+/** Output pixel size for each orientation — swapped, not stretched. */
+export const CAPTURE_DIMS: Record<CaptureOrientation, { w: number; h: number }> = {
+  portrait: { w: 900, h: 1200 },
+  landscape: { w: 1200, h: 900 }
+};
+
 export const SHOT_COUNT = 3;
 
 export const TIMER_MIN = 1;

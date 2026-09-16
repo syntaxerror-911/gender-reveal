@@ -4,53 +4,81 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyGrain,
   canvasToBlob,
-  drawBalloon,
-  drawBow,
-  drawFlower,
-  drawHeart,
-  drawLollipop,
-  drawStar,
-  drawTeddyBear,
+  drawBubbleText,
+  drawCloudBand,
+  drawImageCover,
   ensureStripFonts,
   loadImage,
   roundedRectPath,
-  withShadow,
-  type Motif
+  withShadow
 } from "@/lib/canvas";
 import { PALETTE, type Team } from "@/lib/types";
 
-/* Strip geometry — the 1:4 proportion of a real booth strip. Wider side
-   gutters than a plain print, because this booth trims its border with
-   party-favor stickers instead of leaving it bare. */
-const CELL_W = 900;
-const CELL_H = 1200;
-const GUTTER = 20;
-const PAD_X = 96;
-const PAD_TOP = 268;
-const PAD_BOTTOM = 236;
-const LAMP_BAND = 12;
+/* Card geometry: a cloud-trimmed header and footer bracketing a plain
+   vertical stack of frames — no overlap, no rotation, one frame after
+   another with a clean gutter between them. */
+const CARD_W = 900;
+const CORNER_R = 44;
+const BORDER_W = 16;
 
-const STRIP_W = CELL_W + PAD_X * 2;
+const HEADER_H = 300;
+const FOOTER_H = 280;
+/** Space between the last frame and the footer, mirroring the header's gap. */
+const STACK_FOOTER_GAP = 40;
 
-const GOLD = "#e8c46d";
+const PHOTO_W = 660;
+const PHOTO_H = 780;
+const GUTTER = 28;
 
-/** Team Girl gets a garden; Team Boy gets a toy box. Each set is four motifs
-    so corner/garland placement can cycle through them without repeats. */
-function teamMotifs(team: Team): Motif[] {
-  if (team === "girl") {
-    return [
-      (ctx, x, y, s) => drawFlower(ctx, x, y, s, "#ffb8d4", GOLD),
-      (ctx, x, y, s) => drawBow(ctx, x, y, s, "#ff6fa8"),
-      (ctx, x, y, s) => drawLollipop(ctx, x, y, s, "#ff9dc0", "#fff3e6"),
-      (ctx, x, y, s) => drawHeart(ctx, x, y, s, "#e85a92")
-    ];
-  }
-  return [
-    (ctx, x, y, s) => drawTeddyBear(ctx, x, y, s, "#c69569"),
-    (ctx, x, y, s) => drawBalloon(ctx, x, y, s, "#4fb3ff"),
-    (ctx, x, y, s) => drawStar(ctx, x, y, s, GOLD),
-    (ctx, x, y, s) => drawLollipop(ctx, x, y, s, "#7fc4ff", "#ffffff")
-  ];
+const CREAM = "#fff7e8";
+const WHITE = "#ffffff";
+const GIRL_PINK = PALETTE.girl.lamp;
+const BOY_BLUE = PALETTE.boy.lamp;
+
+/**
+ * One framed photo: a fully opaque white backing behind a cover-cropped
+ * photo, so the print reads as a clean set of snapshots rather than the
+ * photo's raw edges.
+ */
+function drawFramedPhoto(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  x: number,
+  y: number,
+  w: number,
+  h: number
+): void {
+  const frame = 20;
+
+  withShadow(ctx, () => {
+    roundedRectPath(ctx, x, y, w, h, 14);
+    ctx.fillStyle = "#fffdf7";
+    ctx.fill();
+  });
+
+  const ix = x + frame;
+  const iy = y + frame;
+  const iw = w - frame * 2;
+  const ih = h - frame * 2;
+
+  ctx.save();
+  roundedRectPath(ctx, ix, iy, iw, ih, 8);
+  ctx.clip();
+  drawImageCover(ctx, img, ix, iy, iw, ih);
+
+  ctx.globalCompositeOperation = "soft-light";
+  ctx.fillStyle = "rgba(255, 206, 150, 0.22)";
+  ctx.fillRect(ix, iy, iw, ih);
+  ctx.globalCompositeOperation = "source-over";
+  applyGrain(ctx, ix, iy, iw, ih, 0.14);
+  ctx.restore();
+
+  ctx.save();
+  roundedRectPath(ctx, ix + 0.5, iy + 0.5, iw - 1, ih - 1, 8);
+  ctx.strokeStyle = "rgba(36,28,31,0.16)";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
 }
 
 export default function StripResult({
@@ -100,8 +128,9 @@ export default function StripResult({
     setFailed(false);
     setSaveReady(false);
 
-    const height = PAD_TOP + CELL_H * photos.length + GUTTER * (photos.length - 1) + PAD_BOTTOM;
-    canvas.width = STRIP_W;
+    const stackH = PHOTO_H * photos.length + GUTTER * (photos.length - 1);
+    const height = HEADER_H + stackH + STACK_FOOTER_GAP + FOOTER_H;
+    canvas.width = CARD_W;
     canvas.height = height;
 
     const ctx = canvas.getContext("2d");
@@ -119,112 +148,107 @@ export default function StripResult({
       return;
     }
 
-    ctx.clearRect(0, 0, STRIP_W, height);
+    ctx.clearRect(0, 0, CARD_W, height);
 
-    /* Paper stock ------------------------------------------------------- */
-    const paper = ctx.createLinearGradient(0, 0, 0, height);
-    paper.addColorStop(0, "#f6eee2");
-    paper.addColorStop(1, "#eadfcd");
-    ctx.fillStyle = paper;
-    ctx.fillRect(0, 0, STRIP_W, height);
-    applyGrain(ctx, 0, 0, STRIP_W, height, 0.4);
+    /* Card shell ---------------------------------------------------------
+       Everything is clipped to one rounded rect so the panel colour, the
+       cloud bands and the photo stack all share a single clean edge — no
+       separate layers that could seam or double-paint at the border. */
+    ctx.save();
+    roundedRectPath(ctx, 0, 0, CARD_W, height, CORNER_R);
+    ctx.clip();
 
-    // One lamp band at the head of the strip. The original also banded the
-    // foot and ringed every frame; a single accent reads as printed, not busy.
     ctx.fillStyle = p.lamp;
-    ctx.fillRect(0, 0, STRIP_W, LAMP_BAND);
+    ctx.fillRect(0, 0, CARD_W, height);
+    applyGrain(ctx, 0, 0, CARD_W, height, 0.05);
 
-    /* Head — the reveal, and nothing competing with it. --------------- */
-    ctx.textBaseline = "alphabetic";
-    ctx.textAlign = "center";
-    ctx.fillStyle = p.lampDeep;
-    ctx.font = '700 98px "Fraunces", Georgia, serif';
-    ctx.fillText(p.word, STRIP_W / 2, 172);
-
-    const motifs = teamMotifs(team);
-
-    // A small garland under the title — the only ornament that isn't
-    // anchored to a frame, so it reads as a header rather than a sticker.
-    const garlandY = 226;
-    const garlandOrder = [1, 2, 0, 3, 1];
-    const garlandGap = 78;
-    garlandOrder.forEach((m, i) => {
-      const gx = STRIP_W / 2 + (i - (garlandOrder.length - 1) / 2) * garlandGap;
-      withShadow(ctx, () => motifs[m](ctx, gx, garlandY, 38));
-    });
-
-    /* Frames ------------------------------------------------------------ */
+    /* Photo stack ---------------------------------------------------------
+       Plain vertical order, each frame fully opaque and separated by a
+       gutter — nothing overlaps, so there's no seam for a later frame to
+       have to cover. */
+    const photoX = (CARD_W - PHOTO_W) / 2;
     images.forEach((img, i) => {
       if (!img) return;
-      const x = PAD_X;
-      const y = PAD_TOP + i * (CELL_H + GUTTER);
-
-      ctx.save();
-      roundedRectPath(ctx, x, y, CELL_W, CELL_H, 10);
-      ctx.clip();
-
-      ctx.drawImage(img, x, y, CELL_W, CELL_H);
-
-      // Warm the print the way booth chemistry does, then match the paper's
-      // tooth so the photo sits in the page rather than on top of it.
-      ctx.globalCompositeOperation = "soft-light";
-      ctx.fillStyle = "rgba(255, 206, 150, 0.22)";
-      ctx.fillRect(x, y, CELL_W, CELL_H);
-      ctx.globalCompositeOperation = "source-over";
-      applyGrain(ctx, x, y, CELL_W, CELL_H, 0.16);
-
-      ctx.restore();
-
-      ctx.save();
-      roundedRectPath(ctx, x + 0.5, y + 0.5, CELL_W - 1, CELL_H - 1, 10);
-      ctx.strokeStyle = "rgba(36,28,31,0.16)";
-      ctx.lineWidth = 2;
-      ctx.stroke();
-      ctx.restore();
-
-      // Side-gutter trim: small motifs live entirely in the paper margin,
-      // never touching the photo.
-      const leftX = PAD_X / 2;
-      const rightX = STRIP_W - PAD_X / 2;
-      const gutterMotif = motifs[i % motifs.length];
-      const gutterAlt = motifs[(i + 2) % motifs.length];
-      withShadow(ctx, () => gutterMotif(ctx, leftX, y + CELL_H * 0.28, 52));
-      withShadow(ctx, () => gutterAlt(ctx, leftX, y + CELL_H * 0.72, 52));
-      withShadow(ctx, () => gutterAlt(ctx, rightX, y + CELL_H * 0.28, 52));
-      withShadow(ctx, () => gutterMotif(ctx, rightX, y + CELL_H * 0.72, 52));
-
-      // Corner stickers: centered on the frame's own corner so most of the
-      // icon sits in the border and only a small crescent laps onto the
-      // photo — never more than a sliver of the picture itself.
-      const cornerA = motifs[(i * 2) % motifs.length];
-      const cornerB = motifs[(i * 2 + 1) % motifs.length];
-      withShadow(ctx, () => cornerA(ctx, x, y, 92));
-      withShadow(ctx, () => cornerB(ctx, x + CELL_W, y + CELL_H, 92));
+      const y = HEADER_H + i * (PHOTO_H + GUTTER);
+      drawFramedPhoto(ctx, img, photoX, y, PHOTO_W, PHOTO_H);
     });
 
-    /* Foot — a keepsake note rather than booth signage. ----------------- */
+    /* Cloud header ---------------------------------------------------------
+       The solid cream field ends at HEADER_FLAT_H (well under the title's
+       lowest descender), and only the decorative puff fringe below that is
+       scalloped — so no letter ever straddles a cream/panel seam. */
+    const HEADER_CLOUD_R = 44;
+    const HEADER_FLAT_H = 214;
+    drawCloudBand(
+      ctx,
+      -8,
+      -8,
+      CARD_W + 16,
+      HEADER_FLAT_H + HEADER_CLOUD_R * 0.7 + 8,
+      HEADER_CLOUD_R,
+      CREAM,
+      1
+    );
+
+    withShadow(ctx, () => drawBubbleText(ctx, "Gender", CARD_W / 2, 92, 88, GIRL_PINK, CREAM, 14));
+    withShadow(ctx, () => drawBubbleText(ctx, "Reveal!", CARD_W / 2, 178, 78, BOY_BLUE, CREAM, 14));
+
+    /* Cloud footer -----------------------------------------------------
+       Mirrors the header, but in plain white rather than cream, with the
+       classic cursive keepsake note instead of any sticker or badge. */
+    const footerY = height - FOOTER_H;
+    const FOOTER_CLOUD_R = 44;
+    const FOOTER_FLAT_TOP = footerY + 40;
+    const footerBandY = FOOTER_FLAT_TOP - FOOTER_CLOUD_R * 0.7;
+    drawCloudBand(
+      ctx,
+      -8,
+      footerBandY,
+      CARD_W + 16,
+      height + 8 - footerBandY,
+      FOOTER_CLOUD_R,
+      WHITE,
+      -1
+    );
+
     ctx.textAlign = "center";
 
     const thankYouY = height - 150;
-    const dividerY = height - PAD_BOTTOM + 34;
-    withShadow(ctx, () => motifs[3](ctx, STRIP_W / 2, dividerY, 44));
-
     ctx.fillStyle = p.lampDeep;
     ctx.font = '400 68px "Great Vibes", "Brush Script MT", cursive';
-    ctx.fillText("Thank you for coming", STRIP_W / 2, thankYouY);
-    // motifs[1] is skipped here — it's what the last frame's bottom-right
-    // corner sticker already uses, and that sticker sits just above-right
-    // of this spot, so reusing it would read as one icon drawn twice.
-    withShadow(ctx, () => motifs[0](ctx, PAD_X * 0.62, thankYouY - 16, 44));
-    withShadow(ctx, () => motifs[2](ctx, STRIP_W - PAD_X * 0.62, thankYouY - 16, 44));
+    ctx.fillText("Thank you for coming", CARD_W / 2, thankYouY);
 
     ctx.fillStyle = "rgba(36,28,31,0.72)";
     ctx.font = '400 42px "Great Vibes", "Brush Script MT", cursive';
-    ctx.fillText(formatDate(), STRIP_W / 2, height - 96);
+    ctx.fillText(formatDate(), CARD_W / 2, height - 96);
 
     ctx.fillStyle = "rgba(36,28,31,0.6)";
     ctx.font = '400 36px "Great Vibes", "Brush Script MT", cursive';
-    ctx.fillText("~ mommy she & daddy bri", STRIP_W / 2, height - 46);
+    ctx.fillText("~ mommy she & daddy bri", CARD_W / 2, height - 46);
+
+    /* Outer trim: a cream keyline just inside the card edge, echoing a
+       ticket's perforation without needing a real dashed cut line. */
+    ctx.save();
+    roundedRectPath(ctx, BORDER_W / 2, BORDER_W / 2, CARD_W - BORDER_W, height - BORDER_W, CORNER_R);
+    ctx.strokeStyle = CREAM;
+    ctx.lineWidth = BORDER_W;
+    ctx.stroke();
+    ctx.setLineDash([2, 14]);
+    ctx.lineCap = "round";
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = "rgba(44,33,24,0.35)";
+    roundedRectPath(
+      ctx,
+      BORDER_W + 10,
+      BORDER_W + 10,
+      CARD_W - (BORDER_W + 10) * 2,
+      height - (BORDER_W + 10) * 2,
+      CORNER_R * 0.7
+    );
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.restore(); // card-shell clip
 
     if (stale()) return;
     setStripUrl(canvas.toDataURL("image/jpeg", 0.95));

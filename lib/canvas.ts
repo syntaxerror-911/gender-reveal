@@ -403,6 +403,138 @@ export function drawHeart(ctx: CanvasRenderingContext2D, cx: number, cy: number,
   ctx.restore();
 }
 
+/**
+ * Draws an image "cover"-fit into a target rect: crops the source to the
+ * target's aspect ratio (centered) before scaling, so a photo never stretches
+ * regardless of the aspect ratio it was captured at (portrait or landscape).
+ */
+export function drawImageCover(
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  dx: number,
+  dy: number,
+  dw: number,
+  dh: number
+): void {
+  const iw = img.naturalWidth || img.width;
+  const ih = img.naturalHeight || img.height;
+  if (!iw || !ih) return;
+
+  const targetRatio = dw / dh;
+  const srcRatio = iw / ih;
+
+  let sx = 0;
+  let sy = 0;
+  let sw = iw;
+  let sh = ih;
+  if (srcRatio > targetRatio) {
+    sw = ih * targetRatio;
+    sx = (iw - sw) / 2;
+  } else {
+    sh = iw / targetRatio;
+    sy = (ih - sh) / 2;
+  }
+
+  ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+}
+
+/**
+ * A scalloped "cloud" band: a flat color field with a row of overlapping
+ * puffs along one edge. `direction: 1` hangs puffs off the bottom (for a
+ * header sitting at the top of the card); `-1` lifts puffs off the top (for
+ * a footer sitting at the bottom).
+ */
+export function drawCloudBand(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  bandH: number,
+  puffR: number,
+  color: string,
+  direction: 1 | -1
+): void {
+  const count = Math.max(2, Math.round(w / (puffR * 1.4)));
+  const step = w / count;
+  const flatH = bandH - puffR * 0.7;
+
+  ctx.save();
+  ctx.fillStyle = color;
+
+  ctx.beginPath();
+  if (direction === 1) {
+    ctx.rect(x, y, w, flatH);
+  } else {
+    ctx.rect(x, y + bandH - flatH, w, flatH);
+  }
+  ctx.fill();
+
+  const puffY = direction === 1 ? y + flatH : y + bandH - flatH;
+  for (let i = 0; i <= count; i++) {
+    const px = x + i * step;
+    ctx.beginPath();
+    ctx.arc(px, puffY, puffR, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
+ * Sticker-style outlined text: a thick stroke behind a solid fill, so the
+ * letterforms read as a bubble decal rather than flat type.
+ */
+export function drawBubbleText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cx: number,
+  y: number,
+  fontPx: number,
+  fillColor: string,
+  outlineColor: string,
+  outlineWidth: number,
+  weight = 800
+): void {
+  ctx.save();
+  ctx.textAlign = "center";
+  ctx.textBaseline = "alphabetic";
+  ctx.font = `${weight} ${fontPx}px "Fraunces", Georgia, serif`;
+  ctx.lineJoin = "round";
+  ctx.miterLimit = 2;
+  ctx.lineWidth = outlineWidth;
+  ctx.strokeStyle = outlineColor;
+  ctx.strokeText(text, cx, y);
+  ctx.fillStyle = fillColor;
+  ctx.fillText(text, cx, y);
+  ctx.restore();
+}
+
+/** The circular "?" badge tucked into the footer, like a keepsake stamp. */
+export function drawQuestionBadge(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  r: number,
+  fillColor: string,
+  ringColor: string,
+  textColor: string
+): void {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = fillColor;
+  ctx.fill();
+  ctx.lineWidth = r * 0.14;
+  ctx.strokeStyle = ringColor;
+  ctx.stroke();
+
+  ctx.fillStyle = textColor;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.font = `800 ${Math.round(r * 1.25)}px "Fraunces", Georgia, serif`;
+  ctx.fillText("?", cx, cy + r * 0.06);
+  ctx.restore();
+}
+
 /** Converts a canvas to a Blob, resolving null rather than throwing. */
 export function canvasToBlob(canvas: HTMLCanvasElement, quality = 0.95): Promise<Blob | null> {
   return new Promise((resolve) => {
